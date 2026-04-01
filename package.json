@@ -1,0 +1,8 @@
+{
+  "name": "zp-model-highschool-site",
+  "version": "1.0.0",
+  "description": "ZP Model High School, Gadivat - School Website",
+  "dependencies": {
+    "@netlify/blobs": "^7.0.0"
+  }
+}
