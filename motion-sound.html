@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#090d18">
+<title>Motion Sound</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;padding:18px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at top,#1e2b59,#090d18 62%);color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif}.app{width:min(520px,100%);padding:24px;border:1px solid #303957;border-radius:28px;background:#0f1426eF;box-shadow:0 20px 60px #0008}.sub,.hint{color:#aab3ca}.sub{margin-bottom:22px}h1{margin:0 0 6px;font-size:28px}.card{margin:12px 0;padding:16px;border:1px solid #2b3551;border-radius:18px;background:#12192c}label{display:block;font-weight:700;margin-bottom:9px}input[type=file]{width:100%;padding:11px;border-radius:12px;background:#202941;color:#fff}input[type=range]{width:100%}.row{display:flex;justify-content:space-between}.status{display:flex;align-items:center;gap:12px}.dot{width:16px;height:16px;border-radius:50%;background:#566078}.dot.moving{background:#55e6a5;box-shadow:0 0 20px #55e6a5}.statusText{font-weight:750;font-size:18px}.meter{height:12px;margin-top:12px;background:#252e45;border-radius:20px;overflow:hidden}.bar{height:100%;width:0;background:#6d7cff}.hint{font-size:13px;line-height:1.5;margin-top:10px}.time{font-variant-numeric:tabular-nums;color:#b9c3d8;font-size:14px;margin-top:4px}button{width:100%;padding:15px;margin-top:10px;border:0;border-radius:15px;background:#6d7cff;color:white;font-size:16px;font-weight:750}button.stop{background:#303a55}button:disabled{opacity:.45}
+</style>
+</head>
+<body>
+<main class="app">
+<h1>⚡ Motion Sound</h1>
+<div class="sub">Move the phone → sound. Stop moving → pause.</div>
+<div class="card"><label>1. Choose your sound</label><input id="file" type="file" accept="audio/*"><div id="name" class="hint">No sound selected.</div></div>
+<div class="card"><div class="row"><b>2. Sensitivity</b><b id="sv">1.8</b></div><input id="sens" type="range" min=".3" max="5" step=".1" value="1.8"><div class="hint">Lower detects gentler movement.</div></div>
+<div class="card"><div class="status"><span id="dot" class="dot"></span><div><div id="status" class="statusText">Not sensing</div><div id="time" class="time">00:00 / 00:00</div></div></div><div class="meter"><div id="bar" class="bar"></div></div></div>
+<button id="start">Start sensing</button><button id="stop" class="stop" disabled>Stop</button>
+<div class="hint">Motion access works from this secure HTTPS page. Keep the page open and the screen awake while using it.</div>
+<audio id="audio" preload="auto"></audio>
+</main>
+<script>
+const $=id=>document.getElementById(id),audio=$('audio'),file=$('file'),sens=$('sens'),start=$('start'),stop=$('stop');
+let url=null,sensing=false,moving=false,lastT=0,lastMag=null,lastMove=0,smooth=0;
+const STOP_DELAY=180;
+function fmt(s){if(!isFinite(s))return'00:00';s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+file.onchange=()=>{const f=file.files[0];if(!f)return;if(url)URL.revokeObjectURL(url);url=URL.createObjectURL(f);audio.src=url;audio.load();$('name').textContent=f.name};
+sens.oninput=()=>$('sv').textContent=sens.value;
+audio.ontimeupdate=()=>{$('time').textContent=fmt(audio.currentTime)+' / '+fmt(audio.duration)};
+function setMoving(v){moving=v;$('dot').classList.toggle('moving',v);$('status').textContent=v?'MOVEMENT DETECTED':'Still — sound paused';if(v)audio.play().catch(()=>{});else audio.pause()}
+function motion(e){
+ if(!sensing)return;
+ const a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;
+ const now=performance.now(),x=a.x||0,y=a.y||0,z=a.z||0,mag=Math.hypot(x,y,z);
+ if(lastT){const dt=Math.max((now-lastT)/1000,.008),jerk=Math.abs(mag-lastMag)/dt;smooth=smooth*.72+jerk*.28;const threshold=+sens.value;$('bar').style.width=Math.min(100,smooth/(threshold*3)*100)+'%';if(smooth>threshold){lastMove=now;if(!moving)setMoving(true)}else if(moving&&now-lastMove>STOP_DELAY)setMoving(false)}
+ lastT=now;lastMag=mag;
+}
+async function permission(){
+ if(typeof DeviceMotionEvent==='undefined')throw Error('This browser does not expose motion sensors.');
+ if(typeof DeviceMotionEvent.requestPermission==='function'){
+  const r=await DeviceMotionEvent.requestPermission();if(r!=='granted')throw Error('Motion permission denied.');
+ }
+}
+start.onclick=async()=>{
+ if(!audio.src){alert('Choose a sound file first.');return}
+ try{await permission()}catch(e){alert(e.message+'\n\nOpen this page in Chrome over HTTPS and allow Motion/Physical Activity access.');return}
+ try{await audio.play();audio.pause()}catch(e){}
+ sensing=true;moving=false;lastT=0;lastMag=null;smooth=0;start.disabled=true;stop.disabled=false;$('status').textContent='Sensing… move the phone';window.addEventListener('devicemotion',motion,{passive:true});
+};
+stop.onclick=()=>{sensing=false;moving=false;audio.pause();window.removeEventListener('devicemotion',motion);start.disabled=false;stop.disabled=true;$('dot').classList.remove('moving');$('status').textContent='Not sensing';$('bar').style.width='0%'};
+</script>
+</body>
+</html>
